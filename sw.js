@@ -1,5 +1,5 @@
-/* Persian Learn v1 — shell-only precache; level parts + audio on demand */
-const CACHE_NAME = "persian-learn-v1";
+/* Persian Learn v2 — shell-only precache; level parts + audio on demand */
+const CACHE_NAME = "persian-learn-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -42,28 +42,48 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Always network-first for SW itself and audio manifest so hash/cache bumps apply.
+  if (url.pathname.endsWith("/sw.js") || url.pathname.endsWith("/audio/manifest.json")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) {
         if (/\.(js|css|webmanifest)$/.test(url.pathname)) {
-          fetch(req).then((res) => {
-            if (res && res.ok) {
-              caches.open(CACHE_NAME).then((c) => c.put(req, res.clone()));
-            }
-          }).catch(() => {});
+          fetch(req)
+            .then((res) => {
+              if (res && res.ok) {
+                caches.open(CACHE_NAME).then((c) => c.put(req, res.clone()));
+              }
+            })
+            .catch(() => {});
         }
         return cached;
       }
-      return fetch(req).then((res) => {
-        if (res && res.ok && (req.mode === "navigate" || isCacheable(url.pathname))) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return res;
-      }).catch(() => {
-        if (req.mode === "navigate") return caches.match("./index.html");
-        return caches.match(req);
-      });
+      return fetch(req)
+        .then((res) => {
+          if (res && res.ok && (req.mode === "navigate" || isCacheable(url.pathname))) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          if (req.mode === "navigate") return caches.match("./index.html");
+          return caches.match(req);
+        });
     })
   );
 });

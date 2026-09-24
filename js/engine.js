@@ -213,14 +213,26 @@
       btn.setAttribute("aria-label", "השמע שוב");
       btn.innerHTML = showText
         ? '<span class="tts-ico">🔊</span><span class="ru-text">' + escapeHtml(text) + "</span>"
-        : '<span class="tts-ico">🔊</span><span class="tts-label">השמע שוב</span>';
+        : '<span class="tts-ico">🔊</span><span class="tts-label">🔊 השמע שוב</span>';
+      const hint = el("div", "tts-hint", "לחצו 🔊 להשמעה חוזרת");
       btn.onclick = () => {
-        RLSpeech.speak(text);
+        if (RLSpeech.unlockAudio) RLSpeech.unlockAudio();
         btn.classList.add("playing");
-        setTimeout(() => btn.classList.remove("playing"), 900);
+        btn.classList.remove("pulse");
+        hint.classList.remove("warn");
+        hint.textContent = "משמיע…";
+        RLSpeech.speak(text).then((r) => {
+          btn.classList.remove("playing");
+          if (r && r.ok) {
+            hint.textContent = "לחצו 🔊 להשמעה חוזרת";
+          } else {
+            hint.textContent = "לא נשמע? לחצו שוב על 🔊";
+            hint.classList.add("warn");
+            btn.classList.add("pulse");
+          }
+        });
       };
       wrap.appendChild(btn);
-      const hint = el("div", "tts-hint", "לחצו אם השמע הושתק");
       wrap.appendChild(hint);
       return wrap;
     }
@@ -228,13 +240,18 @@
     function scheduleAutoPlay(text) {
       setTimeout(() => {
         RLSpeech.autoPlay(text).then((r) => {
+          if (r && r.ok) return;
+          const hint = stage.querySelector(".tts-hint");
+          const btn = stage.querySelector(".tts-replay");
           if (r && r.blocked) {
-            const hint = stage.querySelector(".tts-hint");
             if (hint) {
               hint.textContent = "לחצו על 🔊 להאזנה (הדפדפן חסם ניגון אוטומטי)";
               hint.classList.add("warn");
             }
-            const btn = stage.querySelector(".tts-replay");
+            if (btn) btn.classList.add("pulse");
+          } else if (hint) {
+            hint.textContent = "לא נשמע אוטומטית — לחצו 🔊";
+            hint.classList.add("warn");
             if (btn) btn.classList.add("pulse");
           }
         });
