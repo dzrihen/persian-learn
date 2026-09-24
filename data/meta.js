@@ -1,0 +1,1 @@
+window.RL_META={"bankSize": 7400, "introducedInContent": 7400, "lessonCounts": {"A1": 364, "A2": 343, "B1": 401, "B2": 400, "C1": 359, "C2": 335}, "totalLessons": 2202, "conversationThemes": ["food", "travel", "health", "work", "shopping", "social", "housing", "services", "emergency"]};

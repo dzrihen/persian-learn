@@ -1,0 +1,19 @@
+{
+  "name": "לומדים פרסית A1→C2",
+  "short_name": "פרסית",
+  "description": "מסלול מקיף ללימוד פרסית מודרנית מרמה A1 עד C2 — האזנה, שיחות ומשפטים מלאים",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#0D9488",
+  "background_color": "#f7f9fc",
+  "icons": [
+    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
