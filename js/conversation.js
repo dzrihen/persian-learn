@@ -137,6 +137,31 @@
       thread.scrollTop = thread.scrollHeight;
     }
 
+    function conversationTranslation(step) {
+      const direct = step && (step.he || step.hebrew || step.translation || step.heTranslation);
+      if (direct) return direct;
+      const said = step && (step._said || step.model || step.ru);
+      const choice = (step && step.choices || []).find((item) => item && item.ru === said);
+      return choice && (choice.he || choice.translation || choice.hebrew);
+    }
+
+    function appendConversationSummary() {
+      const summary = el("section", "dialogue-summary");
+      summary.setAttribute("aria-label", "סיכום השיחה");
+      summary.appendChild(el("h3", "dialogue-summary-title", "סיכום השיחה — תרגום לעברית"));
+      steps.forEach((step, index) => {
+        const row = el("div", "dialogue-summary-row");
+        row.dataset.speaker = step.speaker || "";
+        row.appendChild(el("div", "dialogue-summary-index", String(index + 1)));
+        const said = step.speaker === "npc" ? step.ru : (step._said || step.model || "");
+        row.appendChild(markTarget(el("div", "dialogue-summary-target", said)));
+        const he = conversationTranslation(step);
+        if (he) row.appendChild(el("div", "dialogue-summary-he", he));
+        summary.appendChild(row);
+      });
+      card.appendChild(summary);
+    }
+
     function advanceNpc() {
       while (stepIdx < steps.length && steps[stepIdx].speaker === "npc") {
         const st = steps[stepIdx];
@@ -154,6 +179,7 @@
 
     function finish() {
       updateBar();
+      appendConversationSummary();
       action.innerHTML = "";
       action.appendChild(el("div", "he-prompt", "כל הכבוד! סיימת את השיחה 🎉"));
       const again = el("button", "btn btn-ghost", "🔊 השמע את כל השיחה");
@@ -198,7 +224,7 @@
       const input = document.createElement("input");
       input.type = "text";
       input.className = "conv-input ru";
-      input.dir = "ltr";
+      input.dir = TARGET_DIR;
       input.placeholder = "כתוב תשובה קצרה ביוונית…";
       const checkBtn = el("button", "btn btn-blue btn-sm", "בדיקה");
       free.appendChild(input);
