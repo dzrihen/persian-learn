@@ -265,8 +265,13 @@
     if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
     appEl.innerHTML = '<div id="lesson-root"></div>';
     const root = qs("#lesson-root");
+    const exitOpenedAt = Date.now();
+    let exitHandled = false;
     lessonRunner = RLEngine.runLesson(lesson, root, {
-      onExit() {
+      onExit(opts) {
+        if (!(opts && opts.force) && Date.now() - exitOpenedAt < 1000) return;
+        if (exitHandled) return;
+        exitHandled = true;
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
         navigate("home");
@@ -757,8 +762,13 @@
     if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
     appEl.innerHTML = '<div id="lesson-root"></div>';
     const root = qs("#lesson-root");
+    const exitOpenedAt = Date.now();
+    let exitHandled = false;
     lessonRunner = RLConversation.runScenario(scenario, root, {
-      onExit() {
+      onExit(opts) {
+        if (!(opts && opts.force) && Date.now() - exitOpenedAt < 1000) return;
+        if (exitHandled) return;
+        exitHandled = true;
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
         navigate("conversation");
@@ -875,8 +885,14 @@
     const root = qs("#lesson-root");
 
     try {
+      const exitOpenedAt = Date.now();
+      let exitHandled = false;
       lessonRunner = RLEngine.runLesson(lesson, root, {
-        onExit() {
+        onExit(opts) {
+          // Ignore re-entrant / ghost exits for 1s after open (force bypasses for empty/error UI).
+          if (!(opts && opts.force) && Date.now() - exitOpenedAt < 1000) return;
+          if (exitHandled) return;
+          exitHandled = true;
           if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
           lessonRunner = null;
           if (lesson.level === "GRAM") navigate("grammar");

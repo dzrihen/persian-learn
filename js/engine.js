@@ -75,23 +75,30 @@
     close.setAttribute("aria-label", "יציאה");
     close.disabled = true;
     close.style.opacity = "0.35";
-    // Avoid ghost-click from the same tap that opened the lesson (mobile).
+    close.style.pointerEvents = "none";
+    // Hard arm: ignore exit/close for 1200ms after open (ghost-tap from path/home).
+    let exitArmed = false;
     setTimeout(() => {
+      exitArmed = true;
       close.disabled = false;
       close.style.opacity = "";
-    }, 450);
-    close.onclick = () => {
-      if (close.disabled) return;
+      close.style.pointerEvents = "";
+    }, 1200);
+    function requestExit() {
+      if (!exitArmed || close.disabled) return;
+      if (!window.confirm("לצאת מהשיעור?")) return;
       RLSpeech.stop();
       if (callbacks.onExit) callbacks.onExit();
-    };
+    }
+    close.onclick = requestExit;
     const bar = el("div", "lesson-progress");
     const fill = el("div", "fill");
     bar.appendChild(fill);
     const heartsEl = el("div", "hearts-row");
-    top.appendChild(close);
+    // Append close last so in RTL it sits on the LEFT (away from continue/path taps).
     top.appendChild(bar);
     top.appendChild(heartsEl);
+    top.appendChild(close);
     wrap.appendChild(top);
 
     const stage = el("div", "exercise-stage");
@@ -217,9 +224,19 @@
       stage.innerHTML = "";
       const ex = exercises[idx];
       if (!ex) {
-        if (callbacks.onComplete) {
-          callbacks.onComplete({ xp: lesson.xp || 15, perfect: mistakes === 0, mistakes });
-        }
+        const card = el("div", "exercise-card");
+        stage.appendChild(card);
+        card.appendChild(el("div", "ex-prompt", "אין תרגילים בשיעור זה עדיין"));
+        card.appendChild(
+          el("div", "ex-tip", "השיעור ריק — לא סומן כהושלם. אפשר לחזור למסלול.")
+        );
+        const b = el("button", "btn btn-primary", "חזרה");
+        b.type = "button";
+        b.onclick = () => {
+          RLSpeech.stop();
+          if (callbacks.onExit) callbacks.onExit({ force: true });
+        };
+        card.appendChild(b);
         return;
       }
       const card = el("div", "exercise-card");
@@ -828,8 +845,31 @@
       }
     }
 
-    // kick off
-    render();
+    // kick off — surface render errors instead of dying silently
+    try {
+      render();
+    } catch (e) {
+      console.error("lesson render failed", e);
+      try {
+        stage.innerHTML = "";
+        const card = el("div", "exercise-card");
+        stage.appendChild(card);
+        card.appendChild(el("div", "ex-prompt", "שגיאה בטעינת התרגיל"));
+        const detail = el("div", "ex-tip");
+        detail.textContent = e && e.message ? String(e.message) : String(e);
+        card.appendChild(detail);
+        const b = el("button", "btn btn-primary", "חזרה");
+        b.type = "button";
+        b.onclick = () => {
+          RLSpeech.stop();
+          if (callbacks.onExit) callbacks.onExit({ force: true });
+        };
+        card.appendChild(b);
+      } catch (e2) {
+        console.error("lesson error UI failed", e2);
+        throw e;
+      }
+    }
 
     return {
       destroy() {

@@ -97,22 +97,29 @@
     const top = el("div", "lesson-top");
     const close = el("button", "close-btn", "✕");
     close.type = "button";
+    close.setAttribute("aria-label", "יציאה");
     close.disabled = true;
     close.style.opacity = "0.35";
+    close.style.pointerEvents = "none";
+    let exitArmed = false;
     setTimeout(() => {
+      exitArmed = true;
       close.disabled = false;
       close.style.opacity = "";
-    }, 450);
+      close.style.pointerEvents = "";
+    }, 1200);
     close.onclick = () => {
-      if (close.disabled) return;
+      if (!exitArmed || close.disabled) return;
+      if (!window.confirm("לצאת מהשיעור?")) return;
       RLSpeech.stop();
       if (callbacks.onExit) callbacks.onExit();
     };
     const bar = el("div", "lesson-progress");
     const fill = el("div", "fill");
     bar.appendChild(fill);
-    top.appendChild(close);
+    // Close last → LEFT in RTL, away from continue taps.
     top.appendChild(bar);
+    top.appendChild(close);
     wrap.appendChild(top);
 
     const stage = el("div", "exercise-stage");

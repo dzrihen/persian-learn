@@ -341,6 +341,11 @@ button { cursor: pointer; border: none; background: none; color: inherit; }
 .lesson-top .close-btn {
   min-width: var(--touch); min-height: var(--touch);
   font-size: 1.4rem; color: var(--muted); border-radius: 12px;
+  flex-shrink: 0;
+}
+.lesson-top .close-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
 }
 .lesson-progress {
   flex: 1;
