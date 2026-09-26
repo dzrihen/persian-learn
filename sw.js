@@ -1,5 +1,5 @@
-/* Persian Learn v2 — shell-only precache; level parts + audio on demand */
-const CACHE_NAME = "persian-learn-v2";
+/* Persian Learn v3 — network-first shell; progress lives in localStorage + cloud sync (not SW caches) */
+const CACHE_NAME = "persian-learn-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./js/speech.js",
   "./js/progress.js",
   "./js/srs.js",
+  "./js/cloud-sync.js",
   "./js/engine.js",
   "./js/conversation.js",
   "./js/app.js",
@@ -31,10 +32,25 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME)
+          // Never delete a dedicated progress cache if we ever add one
+          .filter((k) => !/-progress-/i.test(k))
+          .map((k) => caches.delete(k))
+      )
     ).then(() => self.clients.claim())
   );
 });
+
+function isShellAsset(pathname) {
+  return (
+    /\/(js|css)\//.test(pathname) ||
+    /\.(js|css|webmanifest|html)$/.test(pathname) ||
+    pathname.endsWith("/") ||
+    pathname.endsWith("/sw.js")
+  );
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -42,63 +58,40 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always network-first for SW itself and audio manifest so hash/cache bumps apply.
-  if (url.pathname.endsWith("/sw.js") || url.pathname.endsWith("/audio/manifest.json")) {
+  // Network-first for shell / JS / CSS so updates land without «clear site data»
+  if (req.mode === "navigate" || isShellAsset(url.pathname)) {
     event.respondWith(
       fetch(req)
         .then((res) => {
           if (res && res.ok) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
           }
           return res;
         })
-        .catch(() => caches.match(req))
+        .catch(() =>
+          caches.match(req).then((c) => c || (req.mode === "navigate" ? caches.match("./index.html") : undefined))
+        )
     );
     return;
   }
 
   event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) {
-        if (/\.(js|css|webmanifest)$/.test(url.pathname)) {
-          fetch(req)
-            .then((res) => {
-              if (res && res.ok) {
-                caches.open(CACHE_NAME).then((c) => c.put(req, res.clone()));
-              }
-            })
-            .catch(() => {});
+      if (cached) return cached;
+      return fetch(req).then((res) => {
+        if (
+          res &&
+          res.ok &&
+          (url.pathname.includes("/data/") ||
+            url.pathname.includes("/audio/") ||
+            url.pathname.includes("/icons/"))
+        ) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
         }
-        return cached;
-      }
-      return fetch(req)
-        .then((res) => {
-          if (res && res.ok && (req.mode === "navigate" || isCacheable(url.pathname))) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          if (req.mode === "navigate") return caches.match("./index.html");
-          return caches.match(req);
-        });
+        return res;
+      });
     })
   );
 });
-
-function isCacheable(pathname) {
-  const p = pathname.replace(/\/+$/, "") || "/";
-  return (
-    p.endsWith("/index.html") ||
-    p.endsWith("/manifest.webmanifest") ||
-    p.endsWith("/sw.js") ||
-    p.includes("/icons/") ||
-    p.includes("/css/") ||
-    p.includes("/js/") ||
-    p.includes("/data/") ||
-    p.includes("/audio/") ||
-    /\/data\/[abc]\d-part\d\.js$/.test(p)
-  );
-}
