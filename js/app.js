@@ -18,13 +18,70 @@
   let route = "home";
   let activeLevel = null;
   let lessonRunner = null;
+  // While a lesson is open, block stray navigate() (ghost-tap on bottom-nav «בית»).
+  window.__RL_LESSON_ACTIVE = false;
+  let lessonGuardUntil = 0;
+  let lastNavigateReason = "";
+  let continueStarting = false;
 
   function qs(sel, root) {
     return (root || document).querySelector(sel);
   }
 
+  function updateDebugBanner() {
+    if (!/[?&]debug=1(?:&|$)/.test(location.search || "")) return;
+    let el = document.getElementById("rl-debug-nav");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "rl-debug-nav";
+      el.setAttribute("aria-hidden", "true");
+      el.style.cssText =
+        "position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,.82);color:#8f8;font:11px/1.3 ui-monospace,monospace;padding:4px 8px;pointer-events:none;unicode-bidi:plaintext";
+      document.body.appendChild(el);
+    }
+    el.textContent =
+      (lastNavigateReason || "(none)") +
+      " | active=" +
+      !!window.__RL_LESSON_ACTIVE +
+      " | guardMs=" +
+      Math.max(0, lessonGuardUntil - Date.now());
+  }
+
+  function beginLessonGuard() {
+    window.__RL_LESSON_ACTIVE = true;
+    lessonGuardUntil = Date.now() + 2000;
+    lastNavigateReason = "lesson-guard-on @" + Date.now();
+    updateDebugBanner();
+  }
+
+  function endLessonGuard() {
+    window.__RL_LESSON_ACTIVE = false;
+    lessonGuardUntil = 0;
+    continueStarting = false;
+    lastNavigateReason = "lesson-guard-off @" + Date.now();
+    updateDebugBanner();
+  }
+
   function showNav(v) {
     navEl.classList.toggle("hidden", !v);
+    if (!v) {
+      // Bulletproof hide: class + inline so a lingering tap cannot hit «בית».
+      navEl.style.display = "none";
+      navEl.style.pointerEvents = "none";
+      navEl.setAttribute("aria-hidden", "true");
+      navEl.querySelectorAll(".nav-btn").forEach((b) => {
+        b.disabled = true;
+        b.style.pointerEvents = "none";
+      });
+    } else {
+      navEl.style.display = "";
+      navEl.style.pointerEvents = "";
+      navEl.removeAttribute("aria-hidden");
+      navEl.querySelectorAll(".nav-btn").forEach((b) => {
+        b.disabled = false;
+        b.style.pointerEvents = "";
+      });
+    }
   }
 
   function setActiveNav(name) {
@@ -177,7 +234,7 @@
       };
     }
     const bc = qs("#btn-continue");
-    if (bc) bc.onclick = () => startLesson(next.id);
+    if (bc) wireHomeContinue(bc, next.id);
     const bl = qs("#btn-levels");
     if (bl) bl.onclick = () => navigate("levels");
     const bp = qs("#btn-path");
@@ -267,6 +324,7 @@
     const root = qs("#lesson-root");
     const exitOpenedAt = Date.now();
     let exitHandled = false;
+    beginLessonGuard();
     lessonRunner = RLEngine.runLesson(lesson, root, {
       onExit(opts) {
         if (!(opts && opts.force) && Date.now() - exitOpenedAt < 1000) return;
@@ -274,9 +332,11 @@
         exitHandled = true;
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
-        navigate("home");
+        endLessonGuard();
+        navigate("home", { force: true, reason: "srs-onExit" });
       },
       onComplete({ xp }) {
+        endLessonGuard();
         RLProgress.awardXp(xp || 10);
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
@@ -286,7 +346,8 @@
           (xp || 10) +
           " XP</div>" +
           '<button type="button" class="btn btn-primary" id="btn-srs-done">חזרה לבית</button></div>';
-        qs("#btn-srs-done").onclick = () => navigate("home");
+        qs("#btn-srs-done").onclick = () =>
+          navigate("home", { force: true, reason: "srs-done" });
       },
     });
   }
@@ -759,6 +820,7 @@
 
   function startConversation(scenario) {
     showNav(false);
+    beginLessonGuard();
     if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
     appEl.innerHTML = '<div id="lesson-root"></div>';
     const root = qs("#lesson-root");
@@ -771,9 +833,11 @@
         exitHandled = true;
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
-        navigate("conversation");
+        endLessonGuard();
+        navigate("conversation", { force: true, reason: "conv-onExit" });
       },
       onComplete({ xp }) {
+        endLessonGuard();
         RLProgress.awardXp(xp || 10);
         if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
         lessonRunner = null;
@@ -784,8 +848,10 @@
           (xp || 10) +
           ' XP</div><button type="button" class="btn btn-primary" id="btn-c-done">עוד שיחה</button>' +
           '<button type="button" class="btn btn-ghost" id="btn-c-home" style="margin-top:8px">לבית</button></div>';
-        qs("#btn-c-done").onclick = () => navigate("conversation");
-        qs("#btn-c-home").onclick = () => navigate("home");
+        qs("#btn-c-done").onclick = () =>
+          navigate("conversation", { force: true, reason: "conv-done" });
+        qs("#btn-c-home").onclick = () =>
+          navigate("home", { force: true, reason: "conv-home" });
       },
     });
   }
@@ -854,7 +920,51 @@
     });
   }
 
-  async function startLesson(lessonId) {
+  function wireHomeContinue(btn, lessonId) {
+    if (!btn) return;
+    const kickoff = (e) => {
+      if (e) {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        } catch (err) {}
+      }
+      if (continueStarting || window.__RL_LESSON_ACTIVE) return;
+      continueStarting = true;
+      // Hide nav FIRST so the same finger-up cannot hit «בית».
+      showNav(false);
+      beginLessonGuard();
+      appEl.innerHTML = '<div class="boot">פותח שיעור…</div>';
+      // Defer past the opening gesture (rAF×2 + 300ms) so the tap cannot hit new UI.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            startLesson(lessonId, { fromHome: true }).catch((err) => {
+              console.error("startLesson failed", err);
+              endLessonGuard();
+              navigate("home", { force: true, reason: "startLesson-error" });
+            });
+          }, 300);
+        });
+      });
+    };
+    // pointerup first on touch; click as mouse/keyboard fallback. Guard prevents double-fire.
+    btn.addEventListener("pointerup", kickoff);
+    btn.addEventListener("click", kickoff);
+  }
+
+  async function startLesson(lessonId, opts) {
+    opts = opts || {};
+    // Hide nav before any await / DOM swap — critical on phone.
+    showNav(false);
+    beginLessonGuard();
+    if (!opts.fromHome) {
+      appEl.innerHTML = '<div class="boot">פותח שיעור…</div>';
+      // Tiny yield so «פותח» paints; home path already deferred longer.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+
     let lesson = RLCurriculum.getLesson(lessonId);
     if (!lesson) {
       const m = String(lessonId || "").match(/^(a1|a2|b1|b2|c1|c2)/i);
@@ -863,6 +973,8 @@
         try {
           await RLCurriculum.ensureLevel(m[1].toUpperCase());
         } catch (e) {
+          endLessonGuard();
+          showNav(true);
           appEl.innerHTML =
             '<div class="boot"><p>טעינה נכשלה</p><button type="button" class="btn btn-primary" id="les-retry">נסה שוב</button></div>';
           qs("#les-retry").onclick = () => startLesson(lessonId);
@@ -872,13 +984,14 @@
       }
     }
     if (!lesson) {
+      endLessonGuard();
+      showNav(true);
       appEl.innerHTML =
         '<div class="boot"><p>השיעור לא נמצא</p><button type="button" class="btn btn-primary" id="les-missing">חזרה</button></div>';
       const back = qs("#les-missing");
-      if (back) back.onclick = () => navigate("path");
+      if (back) back.onclick = () => navigate("path", { force: true, reason: "lesson-missing" });
       return;
     }
-    showNav(false);
     if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
 
     appEl.innerHTML = '<div id="lesson-root"></div>';
@@ -888,18 +1001,20 @@
       const exitOpenedAt = Date.now();
       let exitHandled = false;
       lessonRunner = RLEngine.runLesson(lesson, root, {
-        onExit(opts) {
+        onExit(exitOpts) {
           // Ignore re-entrant / ghost exits for 1s after open (force bypasses for empty/error UI).
-          if (!(opts && opts.force) && Date.now() - exitOpenedAt < 1000) return;
+          if (!(exitOpts && exitOpts.force) && Date.now() - exitOpenedAt < 1000) return;
           if (exitHandled) return;
           exitHandled = true;
           if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
           lessonRunner = null;
-          if (lesson.level === "GRAM") navigate("grammar");
-          else if (lesson.level === "SRS") navigate("home");
-          else navigate("path");
+          endLessonGuard();
+          const dest =
+            lesson.level === "GRAM" ? "grammar" : lesson.level === "SRS" ? "home" : "path";
+          navigate(dest, { force: true, reason: "lesson-onExit" });
         },
         onComplete({ xp, perfect, mistakes }) {
+          endLessonGuard();
           RLProgress.completeLesson(lesson.id, xp, perfect);
           // ensure next level unlock is reflected
           const lvl = lesson.level;
@@ -914,12 +1029,18 @@
       console.error("runLesson failed", e);
       if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
       lessonRunner = null;
+      endLessonGuard();
       appEl.innerHTML =
         '<div class="boot"><p>שגיאה בפתיחת השיעור</p><p class="sub" style="color:var(--muted)">' +
         escape(e && e.message ? e.message : e) +
         '</p><button type="button" class="btn btn-primary" id="les-err">חזרה למסלול</button></div>';
       const b = qs("#les-err");
-      if (b) b.onclick = () => navigate(lesson.level === "GRAM" ? "grammar" : "path");
+      if (b)
+        b.onclick = () =>
+          navigate(lesson.level === "GRAM" ? "grammar" : "path", {
+            force: true,
+            reason: "lesson-error",
+          });
     }
   }
 
@@ -947,21 +1068,24 @@
       "</div>";
 
     qs("#btn-to-path").onclick = () =>
-      navigate(lesson.level === "GRAM" ? "grammar" : "path");
+      navigate(lesson.level === "GRAM" ? "grammar" : "path", {
+        force: true,
+        reason: "celebration-path",
+      });
     qs("#btn-next-les").onclick = async () => {
       if (lesson.level === "GRAM") {
         const ids = RLCurriculum.grammarLessonIds();
         const idx = ids.indexOf(lesson.id);
         const nid = idx >= 0 ? ids[idx + 1] : null;
         if (nid) startLesson(nid);
-        else navigate("grammar");
+        else navigate("grammar", { force: true, reason: "celebration-grammar-done" });
         return;
       }
       const nxt = RLCurriculum.findNextLesson
         ? await RLCurriculum.findNextLesson()
         : RLCurriculum.nextLesson();
       if (nxt) startLesson(nxt.id);
-      else navigate("home");
+      else navigate("home", { force: true, reason: "celebration-all-done" });
     };
   }
 
@@ -973,7 +1097,22 @@
       .replace(/"/g, "&quot;");
   }
 
-  async function navigate(name) {
+  async function navigate(name, navOpts) {
+    navOpts = navOpts || {};
+    const reason = navOpts.reason || "navigate:" + name;
+    const now = Date.now();
+    if (window.__RL_LESSON_ACTIVE && !navOpts.force) {
+      const fromNav = String(reason).indexOf("bottom-nav:") === 0;
+      // Block all navigate for 2s after open; always block bottom-nav while lesson live.
+      if (now < lessonGuardUntil || fromNav) {
+        lastNavigateReason = "BLOCKED " + reason + " → " + name + " @" + now;
+        updateDebugBanner();
+        console.warn("[RL] navigate blocked while lesson active:", name, reason);
+        return;
+      }
+    }
+    lastNavigateReason = reason + " → " + name + " @" + now;
+    updateDebugBanner();
     route = name;
     if (name === "home") await renderHome();
     else if (name === "path") await renderPath();
@@ -984,7 +1123,14 @@
   }
 
   navEl.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.onclick = () => navigate(btn.dataset.route);
+    btn.onclick = (e) => {
+      if (e) {
+        try {
+          e.stopPropagation();
+        } catch (err) {}
+      }
+      navigate(btn.dataset.route, { reason: "bottom-nav:" + btn.dataset.route });
+    };
   });
 
   // Boot: wait for A1 only (lazy-load other levels on demand)
