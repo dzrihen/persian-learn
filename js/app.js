@@ -39,12 +39,21 @@
         "position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,.82);color:#8f8;font:11px/1.3 ui-monospace,monospace;padding:4px 8px;pointer-events:none;unicode-bidi:plaintext";
       document.body.appendChild(el);
     }
+    let reloadHint = "";
+    try {
+      const lr = sessionStorage.getItem("rl_last_reload");
+      if (lr) {
+        reloadHint = " | lastReload=" + lr;
+        sessionStorage.removeItem("rl_last_reload");
+      }
+    } catch (e) {}
     el.textContent =
       (lastNavigateReason || "(none)") +
       " | active=" +
       !!window.__RL_LESSON_ACTIVE +
       " | guardMs=" +
-      Math.max(0, lessonGuardUntil - Date.now());
+      Math.max(0, lessonGuardUntil - Date.now()) +
+      reloadHint;
   }
 
   function beginLessonGuard() {
@@ -583,6 +592,9 @@
         try {
           await RLCloudSync.pullAndRestore(code);
           alert("ההתקדמות שוחזרה מהענן. מרענן…");
+          try {
+            sessionStorage.setItem("rl_last_reload", "cloud-manual-restore");
+          } catch (e) {}
           location.reload();
         } catch (e) {
           alert("שחזור נכשל: " + (e && e.message ? e.message : e));
@@ -630,6 +642,9 @@
         try {
           await RLCloudSync.importFromFile(f);
           alert("ייבוא הצליח. מרענן…");
+          try {
+            sessionStorage.setItem("rl_last_reload", "file-import");
+          } catch (e) {}
           location.reload();
         } catch (e) {
           alert("ייבוא נכשל: " + (e && e.message ? e.message : e));
@@ -647,13 +662,52 @@
     try {
       const empty = !(RLProgress.hasProgress && RLProgress.hasProgress());
       const code = RLCloudSync.getCode();
-      if (empty && code) {
-        RLCloudSync.pullAndRestore(code)
-          .then(function () {
-            location.reload();
-          })
-          .catch(function () {});
+      if (!(empty && code)) return;
+
+      // Defer auto-pull until after first paint + 2s so «המשך» is not raced by reload.
+      let cancelled = false;
+      function lessonBusy() {
+        return !!(
+          window.__RL_LESSON_ACTIVE ||
+          (typeof continueStarting !== "undefined" && continueStarting) ||
+          lessonRunner
+        );
       }
+      function cancelIfBusy() {
+        if (lessonBusy()) cancelled = true;
+      }
+
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          setTimeout(function () {
+            cancelIfBusy();
+            if (cancelled || lessonBusy()) return;
+            RLCloudSync.pullAndRestore(code)
+              .then(function () {
+                // User may have started a lesson while the pull was in flight.
+                if (cancelled || lessonBusy()) return;
+                const nowHas = !!(RLProgress.hasProgress && RLProgress.hasProgress());
+                // Avoid pull→reload loops when cloud payload is also empty.
+                if (!nowHas) return;
+                // Still idle on home/boot only — apply restore in place (no location.reload).
+                const idleHome =
+                  !lessonBusy() && (route === "home" || route === "boot" || !route);
+                if (!idleHome) return;
+                try {
+                  if (typeof navigate === "function") {
+                    navigate("home", { force: true, reason: "cloud-restore" });
+                  }
+                } catch (err) {
+                  // Older navigate(name) — still refresh home UI without full reload.
+                  try {
+                    navigate("home");
+                  } catch (e2) {}
+                }
+              })
+              .catch(function () {});
+          }, 2000);
+        });
+      });
     } catch (e) {}
   }
 
