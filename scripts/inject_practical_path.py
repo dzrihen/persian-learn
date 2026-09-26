@@ -75,7 +75,7 @@ def practical_exercises(rows, tip, bias="listen"):
         turns = []
         for i, (ru, he) in enumerate(rows[:4]):
             turns.append({"speaker": "npc" if i % 2 == 0 else "user", "ru": ru, "he": he})
-        exs.insert(min(7, len(exs)), dialogue(turns, ["Δεν ξέρω", "Επαναλάβετε", "Πού είναι;"], tip=tip))
+        exs.insert(min(7, len(exs)), dialogue(turns, ["نمی‌دانم", "لطفاً تکرار کنید", "کجاست؟"], tip=tip))
     # boost listen/sentence
     if len(rows) >= 2:
         ru, he = rows[1]

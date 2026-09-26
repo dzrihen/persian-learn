@@ -73,7 +73,15 @@
     const close = el("button", "close-btn", "✕");
     close.type = "button";
     close.setAttribute("aria-label", "יציאה");
+    close.disabled = true;
+    close.style.opacity = "0.35";
+    // Avoid ghost-click from the same tap that opened the lesson (mobile).
+    setTimeout(() => {
+      close.disabled = false;
+      close.style.opacity = "";
+    }, 450);
     close.onclick = () => {
+      if (close.disabled) return;
       RLSpeech.stop();
       if (callbacks.onExit) callbacks.onExit();
     };
@@ -208,6 +216,12 @@
       updateHearts();
       stage.innerHTML = "";
       const ex = exercises[idx];
+      if (!ex) {
+        if (callbacks.onComplete) {
+          callbacks.onComplete({ xp: lesson.xp || 15, perfect: mistakes === 0, mistakes });
+        }
+        return;
+      }
       const card = el("div", "exercise-card");
       stage.appendChild(card);
 
@@ -389,7 +403,7 @@
     }
 
     function renderSentenceBuild(card, ex) {
-      card.appendChild(el("div", "ex-prompt", "בנה את המשפט ביוונית"));
+      card.appendChild(el("div", "ex-prompt", "בנה את המשפט בפרסית"));
       card.appendChild(el("div", "he-prompt", escapeHtml(ex.he)));
       const words = ex.words || [];
       const distractors = ex.distractors || [];
@@ -465,7 +479,7 @@
       });
       // override prompt
       const prompt = card.querySelector(".ex-prompt");
-      if (prompt) prompt.textContent = "תרגם לעברית → יוונית";
+      if (prompt) prompt.textContent = "תרגם לעברית → פרסית";
     }
 
     function renderDialogue(card, ex) {
@@ -476,7 +490,8 @@
           .concat(ex.choices || [], ex.options || [], (turn && turn.choices) || []);
         const match = candidates.find((choice) => choice && typeof choice === "object" && choice.ru === turn.ru);
         if (match && match.he) return match.he;
-        const pairs = ex.pairs || ex.pairMetadata || ex.metadata || [];
+        const pairsRaw = ex.pairs || ex.pairMetadata || ex.metadata || [];
+        const pairs = Array.isArray(pairsRaw) ? pairsRaw : [];
         const pair = pairs.find((item) => item && item.ru === turn.ru);
         return pair && (pair.he || pair.translation || pair.hebrew);
       }
@@ -489,9 +504,9 @@
           const row = el("div", "dialogue-summary-row");
           row.dataset.speaker = turn.speaker || "";
           row.appendChild(el("div", "dialogue-summary-index", String(index + 1)));
-          row.appendChild(markTarget(el("div", "dialogue-summary-target", turn.ru || "")));
+          row.appendChild(markTarget(el("div", "dialogue-summary-target", escapeHtml(turn.ru || ""))));
           const he = dialogueTranslation(turn);
-          if (he) row.appendChild(el("div", "dialogue-summary-he", he));
+          if (he) row.appendChild(el("div", "dialogue-summary-he", escapeHtml(he)));
           summary.appendChild(row);
         });
         card.appendChild(summary);
@@ -614,7 +629,7 @@
     }
 
     function renderMatch(card, ex) {
-      card.appendChild(el("div", "ex-prompt", "התאם בין יוונית לעברית"));
+      card.appendChild(el("div", "ex-prompt", "התאם בין פרסית לעברית"));
       const pairs = (ex.pairs || []).slice();
       const left = shuffle(pairs.map((p, i) => ({ side: "ru", text: p.ru, id: i })));
       const right = shuffle(pairs.map((p, i) => ({ side: "he", text: p.he, id: i })));

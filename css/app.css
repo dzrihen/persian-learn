@@ -618,8 +618,9 @@ button { cursor: pointer; border: none; background: none; color: inherit; }
   margin: 0 auto;
   transform: translateY(110%);
   transition: transform 0.25s ease;
+  pointer-events: none;
 }
-.feedback.show { transform: translateY(0); }
+.feedback.show { transform: translateY(0); pointer-events: auto; }
 .feedback.ok { background: var(--primary-soft); border-color: var(--primary); }
 .feedback.bad { background: var(--danger-soft); border-color: var(--danger); }
 .feedback .fb-title { font-weight: 900; font-size: 1.15rem; margin-bottom: 4px; }

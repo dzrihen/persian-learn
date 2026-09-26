@@ -157,11 +157,11 @@ def exercises_from_phrases(phrases, grammar_tip=None, include_dialogue=None, bia
             {"speaker": "npc", "ru": P(2)["ru"], "he": P(2)["he"]},
             {"speaker": "user", "ru": P(3)["ru"], "he": P(3)["he"]},
         ]
-        dist_d = [P(4)["ru"] if n > 4 else "Δεν ξέρω", P(5)["ru"] if n > 5 else "Πού είναι;", "Ευχαριστώ"]
+        dist_d = [P(4)["ru"] if n > 4 else "نمی‌دانم", P(5)["ru"] if n > 5 else "کجاست؟", "متشکرم"]
         exs.append(dialogue(turns, dist_d))
 
     exs.append(listen_choice(P(4)["ru"], P(4)["he"], pick_wrong(P(4)["he"], rng=rng), P(4).get("translit")))
-    exs.append(sentence_build(P(5)["he"], P(5)["ru"], ["ναι", "όχι", "παρακαλώ"]))
+    exs.append(sentence_build(P(5)["he"], P(5)["ru"], ["بله", "نه", "لطفاً"]))
     exs.append(speak_repeat(P(-1)["ru"], P(-1)["he"], P(-1).get("translit")))
 
     if bias == "listen":
@@ -196,7 +196,7 @@ def checkpoint_exercises(phrases, tip=None):
             {"speaker": "npc", "ru": phrases[2]["ru"], "he": phrases[2]["he"]},
             {"speaker": "user", "ru": phrases[3]["ru"], "he": phrases[3]["he"]},
         ]
-        exs.append(dialogue(turns, ["Δεν καταλαβαίνω", "Επαναλάβετε, παρακαλώ", "Πού είναι η έξοδος;"]))
+        exs.append(dialogue(turns, ["نمی‌فهمم", "لطفاً تکرار کنید", "خروج کجاست؟"]))
     for p in phrases[3:6]:
         exs.append(listen_order(p["ru"]))
     return exs[:12]

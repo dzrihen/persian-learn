@@ -272,7 +272,7 @@
         (ex.pairs || []).forEach((p) => p.ru && texts.push(p.ru));
         (ex.words || []).forEach((w) => texts.push(w));
         texts.forEach((t) => {
-          const toks = String(t).match(/[\u0370-\u03FF\u1F00-\u1FFF\-]+/g) || [];
+          const toks = String(t).match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\-]+/g) || [];
           toks.forEach((w) => {
             if (w.length >= 2) set[w.toLowerCase()] = true;
           });

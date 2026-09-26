@@ -861,31 +861,50 @@
         lesson = RLCurriculum.getLesson(lessonId);
       }
     }
-    if (!lesson) return;
+    if (!lesson) {
+      appEl.innerHTML =
+        '<div class="boot"><p>השיעור לא נמצא</p><button type="button" class="btn btn-primary" id="les-missing">חזרה</button></div>';
+      const back = qs("#les-missing");
+      if (back) back.onclick = () => navigate("path");
+      return;
+    }
     showNav(false);
     if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
 
     appEl.innerHTML = '<div id="lesson-root"></div>';
     const root = qs("#lesson-root");
 
-    lessonRunner = RLEngine.runLesson(lesson, root, {
-      onExit() {
-        if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
-        lessonRunner = null;
-        if (lesson.level === "GRAM") navigate("grammar");
-        else navigate("path");
-      },
-      onComplete({ xp, perfect, mistakes }) {
-        RLProgress.completeLesson(lesson.id, xp, perfect);
-        // ensure next level unlock is reflected
-        const lvl = lesson.level;
-        if (RLCurriculum.isLevelComplete(lvl)) {
-          const next = RLCurriculum.nextLevelId(lvl);
-          if (next) RLProgress.setLevel(next);
-        }
-        showCelebration(lesson, xp, perfect, mistakes);
-      },
-    });
+    try {
+      lessonRunner = RLEngine.runLesson(lesson, root, {
+        onExit() {
+          if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
+          lessonRunner = null;
+          if (lesson.level === "GRAM") navigate("grammar");
+          else if (lesson.level === "SRS") navigate("home");
+          else navigate("path");
+        },
+        onComplete({ xp, perfect, mistakes }) {
+          RLProgress.completeLesson(lesson.id, xp, perfect);
+          // ensure next level unlock is reflected
+          const lvl = lesson.level;
+          if (lvl !== "SRS" && RLCurriculum.isLevelComplete(lvl)) {
+            const next = RLCurriculum.nextLevelId(lvl);
+            if (next) RLProgress.setLevel(next);
+          }
+          showCelebration(lesson, xp, perfect, mistakes);
+        },
+      });
+    } catch (e) {
+      console.error("runLesson failed", e);
+      if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
+      lessonRunner = null;
+      appEl.innerHTML =
+        '<div class="boot"><p>שגיאה בפתיחת השיעור</p><p class="sub" style="color:var(--muted)">' +
+        escape(e && e.message ? e.message : e) +
+        '</p><button type="button" class="btn btn-primary" id="les-err">חזרה למסלול</button></div>';
+      const b = qs("#les-err");
+      if (b) b.onclick = () => navigate(lesson.level === "GRAM" ? "grammar" : "path");
+    }
   }
 
   function showCelebration(lesson, xp, perfect, mistakes) {

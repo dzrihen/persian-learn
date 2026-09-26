@@ -35,10 +35,13 @@
   function normalize(s) {
     return String(s || "")
       .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/ς/g, "σ")
-      .replace(/[^\u0370-\u03ff\u1f00-\u1fff\s]/g, " ")
+      .normalize("NFC")
+      .replace(/[\u064B-\u065F\u0670]/g, "")
+      .replace(/[أإآٱ]/g, "ا")
+      .replace(/ي/g, "ی")
+      .replace(/ك/g, "ک")
+      .replace(/ة/g, "ه")
+      .replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -94,7 +97,14 @@
     const top = el("div", "lesson-top");
     const close = el("button", "close-btn", "✕");
     close.type = "button";
+    close.disabled = true;
+    close.style.opacity = "0.35";
+    setTimeout(() => {
+      close.disabled = false;
+      close.style.opacity = "";
+    }, 450);
     close.onclick = () => {
+      if (close.disabled) return;
       RLSpeech.stop();
       if (callbacks.onExit) callbacks.onExit();
     };
@@ -154,9 +164,9 @@
         row.dataset.speaker = step.speaker || "";
         row.appendChild(el("div", "dialogue-summary-index", String(index + 1)));
         const said = step.speaker === "npc" ? step.ru : (step._said || step.model || "");
-        row.appendChild(markTarget(el("div", "dialogue-summary-target", said)));
+        row.appendChild(markTarget(el("div", "dialogue-summary-target", escapeHtml(said || ""))));
         const he = conversationTranslation(step);
-        if (he) row.appendChild(el("div", "dialogue-summary-he", he));
+        if (he) row.appendChild(el("div", "dialogue-summary-he", escapeHtml(he)));
         summary.appendChild(row);
       });
       card.appendChild(summary);
@@ -225,7 +235,7 @@
       input.type = "text";
       input.className = "conv-input ru";
       input.dir = TARGET_DIR;
-      input.placeholder = "כתוב תשובה קצרה ביוונית…";
+      input.placeholder = "כתוב תשובה קצרה בפרסית…";
       const checkBtn = el("button", "btn btn-blue btn-sm", "בדיקה");
       free.appendChild(input);
       free.appendChild(checkBtn);

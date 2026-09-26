@@ -41,11 +41,13 @@
 
   function normalizeKey(lemma) {
     return String(lemma || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/ς/g, "σ")
-      .replace(/[^Ͱ-Ͽἀ-῿\-]/g, "")
+      .normalize("NFC")
+      .replace(/[ً-ٰٟ]/g, "")
+      .replace(/[أإآٱ]/g, "ا")
+      .replace(/ي/g, "ی")
+      .replace(/ك/g, "ک")
+      .replace(/ة/g, "ه")
+      .replace(/[^؀-ۿݐ-ݿࢠ-ࣿ\-']/g, "")
       .trim();
   }
 
@@ -145,17 +147,17 @@
     const out = [];
     const push = (ru, he) => {
       if (!ru) return;
-      const toks = String(ru).match(/[\u0370-\u03FF\u1F00-\u1FFF\-]{2,}/g) || [];
+      const toks = String(ru).match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\-]{2,}/g) || [];
       toks.forEach((w) => out.push({ lemma: w, he: he || "" }));
     };
     if (!ex) return out;
     if (ex.ru) push(ex.ru, ex.he);
     if (ex.sentence) push(ex.sentence.replace(/___/g, ""), ex.he);
-    if (ex.answer && /^[\u0370-\u03FF\u1F00-\u1FFF\-]+$/.test(ex.answer)) {
+    if (ex.answer && /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\-]+$/.test(ex.answer)) {
       out.push({ lemma: ex.answer, he: ex.he || "" });
     }
     (ex.words || []).forEach((w) => {
-      if (/^[\u0370-\u03FF\u1F00-\u1FFF\-]+$/.test(w)) out.push({ lemma: w, he: ex.he || "" });
+      if (/^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\-]+$/.test(w)) out.push({ lemma: w, he: ex.he || "" });
     });
     (ex.pairs || []).forEach((p) => push(p.ru, p.he));
     (ex.turns || []).forEach((t) => push(t.ru, t.he));
@@ -212,7 +214,7 @@
           words: [c.lemma],
           distractors: distractors,
           ru: c.lemma,
-          tip: "בחר את המילה ביוונית",
+          tip: "בחר את המילה בפרסית",
           _srsLemma: c.lemma,
         });
       }
