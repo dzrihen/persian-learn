@@ -522,6 +522,10 @@
     function renderSentenceBuild(card, ex) {
       card.appendChild(el("div", "ex-prompt", ex.promptHe || "בנה את המשפט בפרסית"));
       if (ex.he && ex.he !== ex.promptHe) card.appendChild(el("div", "he-prompt", escapeHtml(ex.he)));
+      if (ex.ru) {
+        card.appendChild(ttsButton(ex.ru, false));
+        scheduleAutoPlay(ex.ru);
+      }
       const words = ex.words || [];
       const distractors = ex.distractors || [];
       const answer = markTarget(el("div", "chip-answer"));
