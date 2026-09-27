@@ -1,5 +1,5 @@
-/* Persian Learn v13 — network-first shell; progress lives in localStorage + cloud sync (not SW caches) */
-const CACHE_NAME = "persian-learn-v13";
+/* Persian Learn v14 — network-first shell; progress lives in localStorage + cloud sync (not SW caches) */
+const CACHE_NAME = "persian-learn-v14";
 const APP_SHELL = [
   "./",
   "./index.html",
