@@ -1,5 +1,5 @@
-/* Persian Learn v16 — network-first shell; progress lives in localStorage + cloud sync (not SW caches) */
-const CACHE_NAME = "persian-learn-v16";
+/* Persian Learn v17 — network-first shell; progress lives in localStorage + cloud sync (not SW caches) */
+const CACHE_NAME = "persian-learn-v17";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./js/app.js",
   "./data/meta.js",
   "./data/files.js",
+  "./data/he-translit.js",
   "./data/curriculum.js",
   "./data/conversations.js",
   "./data/grammar.js",
