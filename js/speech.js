@@ -179,11 +179,27 @@
     const norm = normalizeFa(text);
     const hNorm = djb2Hex(norm);
     const hLegacy = djb2Hex(raw);
+    // Prefer dedicated slow word clips (audio/w/) when present
     return (
+      man["w:" + hNorm] ||
+      man["w:" + hLegacy] ||
       man[hNorm] ||
       man[hLegacy] ||
       man[norm] ||
       man[raw] ||
+      null
+    );
+  }
+
+  function resolveSlowPath(man, text) {
+    if (!man || !text) return null;
+    const norm = normalizeFa(text);
+    const hNorm = djb2Hex(norm);
+    const hLegacy = djb2Hex(String(text).trim());
+    return (
+      man["slow:" + hNorm] ||
+      man["slow:" + hLegacy] ||
+      man["slow:" + norm] ||
       null
     );
   }
@@ -394,32 +410,68 @@
   async function speakTurns(texts, gapMs, opts) {
     opts = opts || {};
     const list = (texts || []).map((t) => String(t || "").trim()).filter(Boolean);
-    const gap = gapMs == null ? 420 : gapMs;
+    if (!list.length) return { ok: false };
+    if (!soundEnabled() && !opts.force) return { ok: false };
+
+    // One generation token for the whole sequence (stop() / new speak cancels it)
+    const gen = ++playGen;
+    try {
+      if (currentAudio) {
+        currentAudio.onended = null;
+        currentAudio.onerror = null;
+        currentAudio.pause();
+        currentAudio = null;
+      }
+    } catch (e) {}
+    try {
+      if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    } catch (e2) {}
+
+    const gap = gapMs == null ? 500 : gapMs;
+    // Pre-slowed word clips should play at 1.0; optional extra slowdown via opts.rate
+    const fileRate = opts.rate != null ? opts.rate : 1.0;
+    const ttsRate = opts.ttsRate != null ? opts.ttsRate : 0.75;
+
+    const man = await loadManifest();
+    if (gen !== playGen) {
+      if (typeof opts.onDone === "function") opts.onDone(false);
+      return { ok: false, cancelled: true };
+    }
+
     for (let i = 0; i < list.length; i++) {
+      if (gen !== playGen) {
+        if (typeof opts.onDone === "function") opts.onDone(false);
+        return { ok: false, cancelled: true };
+      }
       if (typeof opts.onTurn === "function") {
         try {
           opts.onTurn(i, list[i], list.length);
-        } catch (e) {}
+        } catch (e3) {}
       }
       if (i + 1 < list.length) preload(list[i + 1]);
-      const r = await speak(list[i], opts);
-      if (r && r.cancelled) {
-        if (typeof opts.onDone === "function") {
-          try {
-            opts.onDone(false);
-          } catch (e2) {}
+
+      const path = resolvePath(man, list[i], null);
+      let r;
+      if (path) {
+        r = await playFile(toUrl(path), fileRate, gen);
+        if (gen !== playGen) {
+          if (typeof opts.onDone === "function") opts.onDone(false);
+          return { ok: false, cancelled: true };
         }
+        if (!(r && r.ok) && !(r && r.cancelled)) {
+          r = await speakTts(list[i], { rate: ttsRate }, gen);
+        }
+      } else {
+        r = await speakTts(list[i], { rate: ttsRate }, gen);
+      }
+      if (gen !== playGen || (r && r.cancelled)) {
+        if (typeof opts.onDone === "function") opts.onDone(false);
         return { ok: false, cancelled: true };
       }
-      const genAfter = playGen;
       if (i < list.length - 1 && gap > 0) {
         await sleep(gap);
-        if (playGen !== genAfter) {
-          if (typeof opts.onDone === "function") {
-            try {
-              opts.onDone(false);
-            } catch (e3) {}
-          }
+        if (gen !== playGen) {
+          if (typeof opts.onDone === "function") opts.onDone(false);
           return { ok: false, cancelled: true };
         }
       }
@@ -431,6 +483,24 @@
     }
     return { ok: true };
   }
+
+  /** Play a pre-generated slow full-sentence clip when available. */
+  function speakSlow(text, opts) {
+    opts = opts || {};
+    if (!text) return Promise.resolve({ ok: false });
+    const h = textHash(text);
+    const id = "slow:" + h;
+    // rate 1.0 — clip is already -35% from edge-tts
+    return loadManifest().then((man) => {
+      const slowPath = resolveSlowPath(man, text) || man[id];
+      if (slowPath) {
+        return speak(text, Object.assign({}, opts, { audioId: id, rate: opts.rate != null ? opts.rate : 1.0 }));
+      }
+      // Fallback: normal clip slowed in the player
+      return speak(text, Object.assign({}, opts, { rate: opts.rate != null ? opts.rate : 0.7 }));
+    });
+  }
+
 
   const Rec =
     global.SpeechRecognition || global.webkitSpeechRecognition || null;
@@ -500,6 +570,7 @@
     speak,
     autoPlay,
     speakTurns,
+    speakSlow,
     stop,
     preload,
     unlockAudio,
