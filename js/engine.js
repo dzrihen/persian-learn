@@ -607,6 +607,8 @@
         b.onclick = advance;
         card.appendChild(b);
       }
+      // Every exercise with a play button gets the same row: slow · reveal · skip
+      if (type !== "alphabet" && type !== "dialogue" && card.querySelector(".tts-replay")) appendSkipAltButton(card);
     }
 
     function ttsButton(text, showText) {
@@ -617,7 +619,7 @@
       btn.innerHTML = showText
         ? '<span class="tts-ico">🔊</span><span class="ru-text">' + escapeHtml(text) + "</span>"
         : '<span class="tts-ico">🔊</span><span class="tts-label">השמע שוב</span>';
-      const hint = el("div", "tts-hint", "לחצו 🔊 להשמעה חוזרת");
+      const hint = el("div", "tts-hint", "");
       if (showText) markTarget(btn.querySelector(".ru-text"));
       btn.onclick = () => {
         if (RLSpeech.unlockAudio) RLSpeech.unlockAudio();
@@ -628,7 +630,7 @@
         RLSpeech.speak(text).then((r) => {
           btn.classList.remove("playing");
           if (r && r.ok) {
-            hint.textContent = "לחצו 🔊 להשמעה חוזרת";
+            hint.textContent = "";
           } else {
             hint.textContent = "לא נשמע? לחצו שוב על 🔊";
             hint.classList.add("warn");
@@ -676,19 +678,34 @@
       RLSpeech.stop();
       const cur = exercises[idx];
       if (!cur) return;
-      const alt = alternateForListening(cur);
-      if (alt.type === cur.type) return; // not a listening type
+      let alt = null;
+      if (cur.type === "listen_choice") alt = alternateForListening(cur);
+      else {
+        // non-audio replacement: pick the right target sentence for the Hebrew meaning
+        const ru = String(cur.ru || (cur.words || []).join(" ") || "").trim();
+        const poolAll = lessonSentencePool(exercises);
+        const known = poolAll.find((p) => p.ru === ru);
+        const he = String(cur.correctHe || (cur.type === "true_false" ? "" : cur.he) || (known && known.he) || "").trim();
+        const others = shuffle(lessonSentencePool(exercises).filter((p) => p.ru !== ru)).slice(0, 3).map((p) => p.ru);
+        if (ru && he && others.length >= 2) alt = { type: "he_pick", ru: ru, he: he, options: shuffle([ru].concat(others)), _gen: 1 };
+        else {
+          const a2 = alternateForListening(cur);
+          if (a2.type === "read_choice") alt = a2;
+        }
+      }
+      if (!alt) { advance(); return; } // nothing silent to swap in → just move on (no penalty)
       exercises[idx] = alt;
       render();
     }
 
     function appendSkipAltButton(card) {
+      if (card.querySelector(".reveal-row")) return;
       const curEx = exercises[idx];
-      const heardText = curEx && (curEx.ru || (curEx.words || []).join(" "));
+      const heardText = curEx && (curEx.ru || (curEx.words || []).join(" ") || (curEx.sentence && curEx.answer ? String(curEx.sentence).replace("___", curEx.answer) : ""));
       if (heardText) {
         const rrow = el("div", "check-row reveal-row");
         rrow.style.marginTop = "10px";
-        const rb = el("button", "btn btn-ghost", "👁 אי אפשר לשמוע — הצג כתוב");
+        const rb = el("button", "btn btn-ghost", "👁 הצג כתוב");
         rb.type = "button";
         rb.onclick = () => {
           if (card.querySelector(".heard-reveal")) return;
@@ -711,10 +728,16 @@
           rrow.appendChild(sb);
         }
         rrow.appendChild(rb);
-        const tts = card.querySelector(".tts-wrap");
+        const sk = el("button", "btn btn-ghost", "דלג — תרגיל אחר");
+        sk.type = "button";
+        sk.setAttribute("aria-label", "דלג — תרגיל אחר");
+        sk.onclick = () => skipToAlternate();
+        rrow.appendChild(sk);
+        const tts = card.querySelector(".tts-helper-row") || card.querySelector(".tts-wrap");
         if (tts && tts.parentNode) tts.parentNode.insertBefore(rrow, tts.nextSibling);
         else card.insertBefore(rrow, card.firstChild ? card.firstChild.nextSibling : null);
       }
+      if (card.querySelector(".reveal-row")) return;
       const row = el("div", "check-row skip-alt-row");
       row.style.marginTop = "14px";
       const btn = el("button", "btn btn-ghost", "דלג — תרגיל אחר");
