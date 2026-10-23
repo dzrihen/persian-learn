@@ -426,6 +426,21 @@
     try { exercises = applyDialogueBank(lesson, exercises); } catch (e) {}
     try {
       if (!/^(SRS|GRAM)$/.test(String(lesson.level || ""))) exercises = mixNewTypes(exercises);
+      // Persian: «השלם את השיחה» disabled — swap each dialogue slot for another type
+      if (exercises.some((e) => e && e.type === "dialogue")) {
+        const sp = lessonSentencePool(exercises);
+        const kinds = ["reply_pick", "he_pick", "true_false", "missing_word"];
+        let kk = 0;
+        exercises = exercises.map((e) => {
+          if (!e || e.type !== "dialogue") return e;
+          for (let t = 0; t < kinds.length; t++) {
+            let r = null;
+            try { r = sp.length ? buildNewType(kinds[(kk + t) % kinds.length], sp, []) : null; } catch (x) {}
+            if (r) { kk++; return r; }
+          }
+          return null;
+        }).filter(Boolean);
+      }
       if (lesson._forceType) {
         const forced = buildNewType(lesson._forceType, lessonSentencePool(exercises), exercises.filter((e) => e && e.type === "dialogue"));
         if (forced) exercises[0] = forced;
