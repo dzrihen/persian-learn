@@ -40,6 +40,11 @@ def main():
     for x in bank:
         by_lemma.setdefault(G.norm(x["lemma"]), x)
     cur = PT.curated_set()
+    try:  # colloquial (spoken Tehrani) versions of curated sentences count as curated
+        _cm = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fa_colloquial_map.json'), encoding='utf8'))['map']
+        cur = set(cur) | {v for k, v in _cm.items() if k in cur}
+    except Exception:
+        pass
     problems = collections.Counter()
     samples = []
     n_les = n_ex = 0
