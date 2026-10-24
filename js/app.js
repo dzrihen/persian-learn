@@ -307,6 +307,10 @@
         '<button type="button" class="btn btn-primary" id="btn-levels">לרמות</button></div>';
     }
 
+    // Path hook: a pending step (e.g. unit checkpoint) is recommended before the next lesson.
+    const pathStep = window.RLPath && next ? RLPath.pendingBefore(next.id) : null;
+    if (pathStep) continueHtml = RLPath.continueCardHtml(pathStep);
+
     appEl.innerHTML =
       statsBar() +
       installTipHtml() +
@@ -314,6 +318,7 @@
       "<h1>לומדים פרסית</h1>" +
       '<p class="sub" style="color:var(--muted)">מסלול A1→C2 · תרגול יומיומי · שיחה · חזרה · דקדוק</p></div>' +
       continueHtml +
+      (window.RLPath ? RLPath.homeMenuHtml() : '<div id="home-extra-menu"></div>') +
       '<div class="card">' +
       "<h2>ההתקדמות שלך</h2>" +
       '<p class="sub">אתה בשיעור ' +
@@ -331,7 +336,7 @@
       "</div>" +
       backupCardHtml() +
       convHomeCard() +
-      srsHomeCard() +
+      (window.RLPath ? "" : srsHomeCard()) +
       grammarHomeCard() +
       '<div class="card"><h2>הגדרות</h2>' +
       '<div class="toggle-row"><span>תעתיק בעברית</span>' +
@@ -356,6 +361,7 @@
 
 
     wireBackupCard();
+    if (window.RLPath) RLPath.wireHome(appEl, { step: pathStep, next: next });
 
     const tipX = qs("#tip-x");
     if (tipX) {
@@ -579,6 +585,7 @@
       return;
     }
     const ordered = RLCurriculum.lessonIdsForLevel(levelId);
+    const stepMap = window.RLPath ? RLPath.stepsForLevel(levelId) : {};
 
     let html =
       '<div class="path-header">' +
@@ -635,7 +642,8 @@
           ico +
           '</button><div class="node-label">' +
           escape(les.titleHe) +
-          "</div></div></div>";
+          "</div></div></div>" +
+          (window.RLPath ? RLPath.nodesHtml(les.id, stepMap) : "");
       });
     });
     html += "</div>";
@@ -648,6 +656,7 @@
         startLesson(btn.dataset.id);
       };
     });
+    if (window.RLPath) RLPath.wirePath(appEl);
   }
 
 
@@ -1274,6 +1283,7 @@
         reason: "celebration-path",
       });
     qs("#btn-next-les").onclick = async () => {
+      if (lesson.level !== "GRAM" && window.RLPath && RLPath.offerAfter(lesson.id)) return;
       if (lesson.level === "GRAM") {
         const ids = RLCurriculum.grammarLessonIds();
         const idx = ids.indexOf(lesson.id);
@@ -1386,6 +1396,49 @@
         '<button type="button" class="btn btn-primary" id="boot-retry">נסה שוב</button></div>';
       qs("#boot-retry").onclick = () => boot();
     }
+  }
+
+  // Path hooks (js/path.js): path steps / home cards can run screens and lessons.
+  if (window.RLPath) {
+    RLPath.setAppContext({
+      el: () => appEl,
+      navigate: (n) => navigate(n),
+      startLesson: (id) => startLesson(id),
+      showNav: (b) => showNav(b),
+      async startNextLesson() {
+        const nxt = RLCurriculum.findNextLesson ? await RLCurriculum.findNextLesson() : RLCurriculum.nextLesson();
+        if (nxt) startLesson(nxt.id);
+        else {
+          window.__RL_LESSON_ACTIVE = false;
+          navigate("home");
+        }
+      },
+      runLesson(lesson, cb) {
+        cb = cb || {};
+        window.__RL_LESSON_ACTIVE = true;
+        showNav(false);
+        if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
+        appEl.innerHTML = '<div id="lesson-root"></div>';
+        lessonRunner = RLEngine.runLesson(lesson, qs("#lesson-root"), {
+          onResult: cb.onResult,
+          onExit() {
+            if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
+            lessonRunner = null;
+            window.__RL_LESSON_ACTIVE = false;
+            if (cb.onExit) cb.onExit();
+            else navigate("path");
+          },
+          onComplete(r) {
+            if (lessonRunner && lessonRunner.destroy) lessonRunner.destroy();
+            lessonRunner = null;
+            window.__RL_LESSON_ACTIVE = false;
+            if (cb.onComplete) cb.onComplete(r);
+            else navigate("path");
+          },
+        });
+        return lessonRunner;
+      },
+    });
   }
 
   boot();
